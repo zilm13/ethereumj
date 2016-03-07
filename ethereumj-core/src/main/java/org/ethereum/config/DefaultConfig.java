@@ -1,8 +1,6 @@
 package org.ethereum.config;
 
-import org.ethereum.datasource.HashMapDB;
-import org.ethereum.datasource.KeyValueDataSource;
-import org.ethereum.datasource.LevelDbDataSource;
+import org.ethereum.datasource.*;
 import org.ethereum.db.BlockStore;
 import org.ethereum.db.IndexedBlockStore;
 import org.mapdb.DB;
@@ -74,13 +72,17 @@ public class DefaultConfig {
 
         KeyValueDataSource blocksDB = appCtx.getBean(LevelDbDataSource.class, "blocks");
         blocksDB.init();
+        KeyValueDataSource indexDS = appCtx.getBean(LevelDbDataSource.class, "index");
+        indexDS.init();
 
 
-        IndexedBlockStore cache = new IndexedBlockStore();
-        cache.init(new HashMap<Long, List<IndexedBlockStore.BlockInfo>>(), new HashMapDB(), null, null);
+//        IndexedBlockStore cache = new IndexedBlockStore();
+//        cache.init(new HashMap<Long, List<IndexedBlockStore.BlockInfo>>(), new HashMapDB(), null, null);
 
         IndexedBlockStore indexedBlockStore = new IndexedBlockStore();
-        indexedBlockStore.init(indexMap, blocksDB, cache, indexDB);
+        CachingDataSource cds = new CachingDataSource(indexDS);
+        indexedBlockStore.init(new ObjectArray<>(new DatasourceArray(cds), BLOCK_INFO_SERIALIZER),
+                blocksDB, null, null);
 
 
         return indexedBlockStore;
