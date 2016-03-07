@@ -3,6 +3,7 @@ package org.ethereum.config;
 import org.ethereum.core.PendingTransaction;
 import org.ethereum.core.Repository;
 import org.ethereum.core.Transaction;
+import org.ethereum.datasource.GemFireDataSource;
 import org.ethereum.datasource.KeyValueDataSource;
 import org.ethereum.datasource.LevelDbDataSource;
 import org.ethereum.datasource.mapdb.MapDBFactory;
@@ -55,6 +56,8 @@ public class CommonConfig {
                 return redisConnection.createDataSource("");
             } else if ("mapdb".equals(dataSource)) {
                 return mapDBFactory.createDataSource();
+            } else if ("gemfire".equals(dataSource)) {
+                return new GemFireDataSource();
             }
 
             dataSource = "leveldb";

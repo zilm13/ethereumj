@@ -3,22 +3,13 @@ package org.ethereum.config;
 import org.ethereum.datasource.*;
 import org.ethereum.db.BlockStore;
 import org.ethereum.db.IndexedBlockStore;
-import org.mapdb.DB;
-import org.mapdb.DBMaker;
-import org.mapdb.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.*;
 
 import javax.annotation.PostConstruct;
-import java.io.File;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import static org.ethereum.db.IndexedBlockStore.BLOCK_INFO_SERIALIZER;
 
@@ -54,30 +45,12 @@ public class DefaultConfig {
     @Bean
     public BlockStore blockStore(){
 
-        String database = config.databaseDir();
-
-        String blocksIndexFile = database + "/blocks/index";
-        File dbFile = new File(blocksIndexFile);
-        if (!dbFile.getParentFile().exists()) dbFile.getParentFile().mkdirs();
-
-        DB indexDB = DBMaker.fileDB(dbFile)
-                .closeOnJvmShutdown()
-                .make();
-
-        Map<Long, List<IndexedBlockStore.BlockInfo>> indexMap = indexDB.hashMapCreate("index")
-                .keySerializer(Serializer.LONG)
-                .valueSerializer(BLOCK_INFO_SERIALIZER)
-                .counterEnable()
-                .makeOrGet();
-
-        KeyValueDataSource blocksDB = appCtx.getBean(LevelDbDataSource.class, "blocks");
+        KeyValueDataSource blocksDB = commonConfig.keyValueDataSource();
+        blocksDB.setName("blocks");
         blocksDB.init();
-        KeyValueDataSource indexDS = appCtx.getBean(LevelDbDataSource.class, "index");
+        KeyValueDataSource indexDS = commonConfig.keyValueDataSource();
+        indexDS.setName("index");
         indexDS.init();
-
-
-//        IndexedBlockStore cache = new IndexedBlockStore();
-//        cache.init(new HashMap<Long, List<IndexedBlockStore.BlockInfo>>(), new HashMapDB(), null, null);
 
         IndexedBlockStore indexedBlockStore = new IndexedBlockStore();
         CachingDataSource cds = new CachingDataSource(indexDS);
@@ -95,5 +68,10 @@ public class DefaultConfig {
     @Bean
     LevelDbDataSource levelDbDataSource(String name) {
         return new LevelDbDataSource(name);
+    }
+
+    @Lazy @Bean @Scope("prototype")
+    GemFireDataSource gemFireDataSource(String name) {
+        return new GemFireDataSource(name);
     }
 }

@@ -1,14 +1,13 @@
 package org.ethereum.db;
 
 import org.ethereum.config.SystemProperties;
+import org.ethereum.crypto.SHA3Helper;
 import org.ethereum.datasource.DataSourcePool;
 import org.ethereum.datasource.KeyValueDataSource;
+import org.ethereum.datasource.XorDataSource;
 import org.ethereum.trie.SecureTrie;
 import org.ethereum.trie.TrieImpl;
-import org.ethereum.util.RLP;
-import org.ethereum.util.RLPElement;
-import org.ethereum.util.RLPItem;
-import org.ethereum.util.RLPList;
+import org.ethereum.util.*;
 import org.ethereum.vm.DataWord;
 import org.spongycastle.util.Arrays;
 import org.spongycastle.util.encoders.Hex;
@@ -37,12 +36,14 @@ public class ContractDetailsImpl implements ContractDetails {
     private boolean dirty = false;
     private boolean deleted = false;
     private boolean externalStorage;
+    private KeyValueDataSource db;
     private KeyValueDataSource externalStorageDataSource;
 
     public ContractDetailsImpl() {
     }
 
-    public ContractDetailsImpl(byte[] rlpCode) {
+    public ContractDetailsImpl(KeyValueDataSource db, byte[] rlpCode) {
+        this.db = db;
         decode(rlpCode);
     }
 
@@ -50,6 +51,10 @@ public class ContractDetailsImpl implements ContractDetails {
         this.address = address;
         this.storageTrie = storageTrie;
         this.code = code;
+    }
+
+    public void setDb(KeyValueDataSource db) {
+        this.db = db;
     }
 
     private void addKey(byte[] key) {
@@ -247,14 +252,16 @@ public class ContractDetailsImpl implements ContractDetails {
         if (externalStorage) {
             storageTrie.getCache().setDB(getExternalStorageDataSource());
             storageTrie.sync();
-
-            DataSourcePool.closeDataSource("details-storage/" + toHexString(address));
+//            DataSourcePool.closeDataSource("details-storage/" + toHexString(address));
         }
     }
 
+    private static final byte[] externalSourceHash = Arrays.copyOfRange(SHA3Helper.sha3("externalSourceHash".getBytes()), 0, 20);
+
     private KeyValueDataSource getExternalStorageDataSource() {
         if (externalStorageDataSource == null) {
-            externalStorageDataSource = levelDbByName("details-storage/" + toHexString(address));
+            externalStorageDataSource = new XorDataSource(db, ByteUtil.xor(externalSourceHash, address));
+//            externalStorageDataSource = levelDbByName("details-storage/" + toHexString(address));
         }
         return externalStorageDataSource;
     }
@@ -300,6 +307,7 @@ public class ContractDetailsImpl implements ContractDetails {
         ContractDetailsImpl details = new ContractDetailsImpl(this.address, snapStorage, this.code);
         details.externalStorage = this.externalStorage;
         details.keys = this.keys;
+        details.db = db;
 
         return details;
     }

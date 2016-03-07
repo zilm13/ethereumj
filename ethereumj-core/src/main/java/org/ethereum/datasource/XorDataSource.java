@@ -79,6 +79,6 @@ public class XorDataSource implements KeyValueDataSource {
 
     @Override
     public void close() {
-        source.close();
+//        source.close();
     }
 }

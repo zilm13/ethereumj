@@ -39,7 +39,7 @@ public class ContractDetailsTest {
 
         byte[] data = contractDetails.getEncoded();
 
-        ContractDetailsImpl contractDetails_ = new ContractDetailsImpl(data);
+        ContractDetailsImpl contractDetails_ = new ContractDetailsImpl(null, data);
 
         assertEquals(Hex.toHexString(code),
             Hex.toHexString(contractDetails_.getCode()));
@@ -120,7 +120,7 @@ public class ContractDetailsTest {
 
         byte[] data = contractDetails.getEncoded();
 
-        ContractDetailsImpl contractDetails_ = new ContractDetailsImpl(data);
+        ContractDetailsImpl contractDetails_ = new ContractDetailsImpl(null, data);
 
         assertEquals(Hex.toHexString(code),
                 Hex.toHexString(contractDetails_.getCode()));
