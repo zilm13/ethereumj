@@ -2,10 +2,7 @@ package org.ethereum.datasource;
 
 import org.ethereum.util.ByteUtil;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Created by Anton Nashatyrev on 18.02.2016.
@@ -40,12 +37,14 @@ public class XorDataSource implements KeyValueDataSource {
 
     @Override
     public Set<byte[]> keys() {
-        Set<byte[]> keys = source.keys();
-        HashSet<byte[]> ret = new HashSet<>(keys.size());
-        for (byte[] key : keys) {
-            ret.add(convertKey(key));
-        }
-        return ret;
+        return Collections.emptySet();
+//        throw new RuntimeException("Not implemented");
+//        Set<byte[]> keys = source.keys();
+//        HashSet<byte[]> ret = new HashSet<>(keys.size());
+//        for (byte[] key : keys) {
+//            ret.add(convertKey(key));
+//        }
+//        return ret;
     }
 
     @Override
