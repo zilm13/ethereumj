@@ -279,6 +279,10 @@ public class NodeManager implements Functional.Consumer<DiscoveryEvent>{
         }
     }
 
+    public synchronized void addTrustedNode(Node node) {
+        getNodeHandler(node).getNodeStatistics().setPredefined(true);
+    }
+
     public synchronized List<NodeHandler> getNodes(int minReputation) {
         List<NodeHandler> ret = new ArrayList<>();
         for (NodeHandler nodeHandler : nodeHandlerMap.values()) {

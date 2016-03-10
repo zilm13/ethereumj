@@ -111,6 +111,7 @@ ext {
 
 dependencies {
     compile 'org.apache.geode:gemfire-core:1.0.0-incubating.M1'
+    compile 'com.netflix.eureka:eureka-client:1.4.3'
 
     compile "io.netty:netty-all:4.0.30.Final"
     compile "com.madgag.spongycastle:core:${scastleVersion}" // for SHA3 and SECP256K1
