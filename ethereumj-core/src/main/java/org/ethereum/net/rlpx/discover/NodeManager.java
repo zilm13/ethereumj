@@ -247,7 +247,7 @@ public class NodeManager implements Functional.Consumer<DiscoveryEvent>{
         }
         NodeHandler nodeHandler = getNodeHandler(n);
 
-        logger.trace("===> ({}) {} [{}] {}", sender, m.getClass().getSimpleName(), nodeHandler, m);
+        logger.debug("===> ({}) {}", sender, m);
 
         byte type = m.getType()[0];
         switch (type) {
@@ -268,8 +268,7 @@ public class NodeManager implements Functional.Consumer<DiscoveryEvent>{
 
     public void sendOutbound(DiscoveryEvent discoveryEvent) {
         if (discoveryEnabled && messageSender != null) {
-            logger.trace(" <===({}) {} [{}] {}", discoveryEvent.getAddress(),
-                    discoveryEvent.getMessage().getClass().getSimpleName(), this, discoveryEvent.getMessage());
+            logger.debug(" <===({}) {}", discoveryEvent.getAddress(), discoveryEvent.getMessage());
             messageSender.accept(discoveryEvent);
         }
     }

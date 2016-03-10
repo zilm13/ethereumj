@@ -170,7 +170,6 @@ public class NodeHandler {
     }
 
     void handlePing(PingMessage msg) {
-        logger.debug(" ===> [PING] " + this);
         getNodeStatistics().discoverInPing.add();
         if (!nodeManager.table.getNode().equals(node)) {
             sendPong(msg.getMdc());
@@ -178,7 +177,6 @@ public class NodeHandler {
     }
 
     void handlePong(PongMessage msg) {
-        logger.debug(" ===> [PONG] " + this);
         if (waitForPong) {
             waitForPong = false;
             getNodeStatistics().discoverInPong.add();
@@ -188,7 +186,6 @@ public class NodeHandler {
     }
 
     void handleNeighbours(NeighborsMessage msg) {
-        logger.debug(" ===> [NEIGHBOURS] " + this + ", Count: " + msg.getNodes().size());
         getNodeStatistics().discoverInNeighbours.add();
         for (Node n : msg.getNodes()) {
             nodeManager.getNodeHandler(n);
@@ -196,7 +193,6 @@ public class NodeHandler {
     }
 
     void handleFindNode(FindNodeMessage msg) {
-        logger.debug(" ===> [FIND_NODE] " + this);
         getNodeStatistics().discoverInFind.add();
         List<Node> closest = nodeManager.table.getClosestNodes(msg.getTarget());
         sendNeighbours(closest);
@@ -221,7 +217,6 @@ public class NodeHandler {
         if (waitForPong) {
             logger.debug("<=/=  [PING] (Waiting for pong) " + this);
         }
-        logger.debug("<===  [PING] " + this);
 
         Message ping = PingMessage.create(nodeManager.table.getNode().getHost(),
                 nodeManager.table.getNode().getPort(), nodeManager.key);
@@ -245,14 +240,12 @@ public class NodeHandler {
     }
 
     void sendPong(byte[] mdc) {
-        logger.debug("<===  [PONG] " + this);
         Message pong = PongMessage.create(mdc, node.getHost(), node.getPort(), nodeManager.key);
         sendMessage(pong);
         getNodeStatistics().discoverOutPong.add();
     }
 
     void sendNeighbours(List<Node> neighbours) {
-        logger.debug("<===  [NEIGHBOURS] " + this);
         NeighborsMessage neighbors = NeighborsMessage.create(neighbours, nodeManager.key);
         sendMessage(neighbors);
         getNodeStatistics().discoverOutNeighbours.add();
