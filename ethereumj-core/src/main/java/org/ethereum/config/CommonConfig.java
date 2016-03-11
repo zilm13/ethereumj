@@ -78,7 +78,7 @@ public class CommonConfig {
     private RemoteDataSource connectRemoteDb() {
         String vip = config.getConfig().getString("remote.datasource.eureka.vip");
         List<InstanceInfo> dbInst = null;
-        while (dbInst == null) {
+        while (dbInst == null || dbInst.size() == 0) {
             logger.info("Quering Eureka for DB service at " + vip);
             getEurekaInstanceConfig();
             dbInst = DiscoveryManager.getInstance().getEurekaClient().getInstancesByVipAddress(vip, false);
