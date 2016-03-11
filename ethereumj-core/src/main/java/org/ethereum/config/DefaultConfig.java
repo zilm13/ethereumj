@@ -74,4 +74,9 @@ public class DefaultConfig {
     GemFireDataSource gemFireDataSource(String name) {
         return new GemFireDataSource(name);
     }
+
+    @Lazy @Bean @Scope("prototype")
+    GemFireDataSource gemFireDataSource() {
+        return new GemFireDataSource();
+    }
 }

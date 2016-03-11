@@ -1,6 +1,7 @@
 package org.ethereum.net.eureka;
 
 import com.netflix.appinfo.ApplicationInfoManager;
+import com.netflix.appinfo.EurekaInstanceConfig;
 import com.netflix.appinfo.InstanceInfo;
 import com.netflix.appinfo.MyDataCenterInstanceConfig;
 import com.netflix.discovery.*;
@@ -24,28 +25,15 @@ import java.util.*;
 public class EurekaDiscover {
     private static final Logger logger = LoggerFactory.getLogger("discover");
 
-    private class EthereumjConfig extends MyDataCenterInstanceConfig {
-        @Override
-        public String getInstanceId() {
-            return Hex.toHexString(config.nodeId());
-        }
-        @Override
-        public int getNonSecurePort() {
-            return config.listenPort();
-        }
-        @Override
-        public boolean isNonSecurePortEnabled() {
-            return true;
-        }
-    }
-
     @Autowired
     private SystemProperties config = SystemProperties.CONFIG;
 
     @Autowired
     private NodeManager nodeManager;
 
-    private EthereumjConfig eurekaInstanceConfig;
+    @Autowired
+    private EurekaInstanceConfig eurekaInstanceConfig;
+
     private boolean published = false;
     private Set<Node> activeNodes = new HashSet<>();
 
@@ -55,7 +43,6 @@ public class EurekaDiscover {
 
     @PostConstruct
     private void init() {
-        eurekaInstanceConfig = new EthereumjConfig();
         if (config.getConfig().hasPath("peer.discovery.eureka.enabled") &&
                 config.getConfig().getBoolean("peer.discovery.eureka.enabled")) {
             register();
@@ -64,8 +51,6 @@ public class EurekaDiscover {
 
     public void register() {
         logger.info("Registering and activating node in Eureka...");
-        DiscoveryManager.getInstance().initComponent(
-                eurekaInstanceConfig, new DefaultEurekaClientConfig());
         ApplicationInfoManager.getInstance().setInstanceStatus(InstanceInfo.InstanceStatus.UP);
 
         EurekaClient eurekaClient = DiscoveryManager.getInstance().getEurekaClient();
@@ -91,8 +76,9 @@ public class EurekaDiscover {
     }
 
     private void nodeAppeared(Node node) {
-        if (!published) {
-            if (Arrays.equals(node.getId(), config.nodeId())) {
+        boolean homeNode = Arrays.equals(node.getId(), config.nodeId());
+        if (homeNode) {
+            if (!published) {
                 published = true;
                 logger.info("Home node published in Eureka!");
             }

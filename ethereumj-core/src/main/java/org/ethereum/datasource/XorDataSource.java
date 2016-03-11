@@ -1,5 +1,6 @@
 package org.ethereum.datasource;
 
+import org.ethereum.crypto.SHA3Helper;
 import org.ethereum.util.ByteUtil;
 
 import java.util.*;
@@ -11,6 +12,9 @@ public class XorDataSource implements KeyValueDataSource {
     KeyValueDataSource source;
     byte[] subKey;
 
+    public XorDataSource(KeyValueDataSource source) {
+        this.source = source;
+    }
     public XorDataSource(KeyValueDataSource source, byte[] subKey) {
         this.source = source;
         this.subKey = subKey;
@@ -69,6 +73,9 @@ public class XorDataSource implements KeyValueDataSource {
     @Override
     public void init() {
         source.init();
+        if (subKey == null) {
+            subKey = SHA3Helper.sha3(getName().getBytes());
+        }
     }
 
     @Override
