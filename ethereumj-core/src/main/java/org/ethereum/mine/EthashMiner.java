@@ -20,8 +20,8 @@ public class EthashMiner implements MinerIfc {
     @Autowired
     SystemProperties config = SystemProperties.CONFIG;
 
-    private int cpuThreads;
-    private boolean fullMining = true;
+    private int cpuThreads = config.getMineCpuThreads();
+    private boolean fullMining = config.isMineFullDataset();
 
     @PostConstruct
     private void init() {
