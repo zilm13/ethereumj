@@ -2,13 +2,17 @@ package org.ethereum.datasource;
 
 import org.ethereum.crypto.SHA3Helper;
 import org.ethereum.util.ByteUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
 /**
  * Created by Anton Nashatyrev on 18.02.2016.
  */
-public class XorDataSource implements KeyValueDataSource {
+public class XorDataSource implements KeyValueDataSource, Flushable {
+    private static final Logger logger = LoggerFactory.getLogger("db");
+
     KeyValueDataSource source;
     byte[] subKey;
 
@@ -75,6 +79,7 @@ public class XorDataSource implements KeyValueDataSource {
         source.init();
         if (subKey == null) {
             subKey = SHA3Helper.sha3(getName().getBytes());
+            logger.info("XorDataSource inited: " + getName());
         }
     }
 
@@ -86,5 +91,12 @@ public class XorDataSource implements KeyValueDataSource {
     @Override
     public void close() {
 //        source.close();
+    }
+
+    @Override
+    public void flush() {
+        if (source instanceof Flushable) {
+            ((Flushable) source).flush();
+        }
     }
 }

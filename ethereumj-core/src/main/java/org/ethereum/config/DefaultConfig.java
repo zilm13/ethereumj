@@ -53,8 +53,8 @@ public class DefaultConfig {
         indexDS.init();
 
         IndexedBlockStore indexedBlockStore = new IndexedBlockStore();
-        CachingDataSource cds = new CachingDataSource(indexDS);
-        indexedBlockStore.init(new ObjectArray<>(new DatasourceArray(cds), BLOCK_INFO_SERIALIZER),
+//        CachingDataSource cds = new CachingDataSource(indexDS);
+        indexedBlockStore.init(new ObjectArray<>(new DatasourceArray(indexDS), BLOCK_INFO_SERIALIZER),
                 blocksDB, null, null);
 
 

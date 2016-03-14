@@ -2,10 +2,6 @@ package org.ethereum.datasource;
 
 import org.ethereum.util.ByteUtil;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
-
 /**
  * Created by Anton Nashatyrev on 04.03.2016.
  */
@@ -45,8 +41,8 @@ public class DatasourceArray  {
     }
 
     public void flush() {
-        if (db instanceof CachingDataSource) {
-            ((CachingDataSource) db).flush();
+        if (db instanceof Flushable) {
+            ((Flushable) db).flush();
         }
     }
 }
