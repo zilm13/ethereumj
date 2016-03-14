@@ -20,8 +20,8 @@ public class EthashMiner implements MinerIfc {
     @Autowired
     SystemProperties config = SystemProperties.CONFIG;
 
-    private int cpuThreads = config.getMineCpuThreads();
-    private boolean fullMining = config.isMineFullDataset();
+    private int cpuThreads = 2;  // FIXME: the instance is created during SystemProperties <clinit>
+    private boolean fullMining = true;
 
     @PostConstruct
     private void init() {
@@ -31,6 +31,7 @@ public class EthashMiner implements MinerIfc {
 
     @Override
     public ListenableFuture<Long> mine(Block block) {
+        init();
         return fullMining ?
                 Ethash.getForBlock(block.getNumber()).mine(block, cpuThreads) :
                 Ethash.getForBlock(block.getNumber()).mineLight(block, cpuThreads);
