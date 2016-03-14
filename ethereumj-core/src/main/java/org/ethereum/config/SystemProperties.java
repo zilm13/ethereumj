@@ -109,6 +109,9 @@ public class SystemProperties {
             String res = System.getProperty("ethereumj.conf.res");
             Config cmdLineConfigRes = res != null ? ConfigFactory.parseResources(res) : ConfigFactory.empty();
             logger.info("Config (" + (cmdLineConfigRes.entrySet().size() > 0 ? " yes " : " no  ") + "): user properties from -Dethereumj.conf.res resource '" + res + "'");
+            String envFile = System.getenv("ETHJ_CONFIG");
+            Config envFileConfig = envFile != null ? ConfigFactory.parseFile(new File(envFile)) : ConfigFactory.empty();
+            logger.info("Config (" + (envFileConfig.entrySet().size() > 0 ? " yes " : " no  ") + "): user properties from $ETHJ_CONFIG file '" + envFile + "'");
             Config userConfig = ConfigFactory.parseResources("user.conf");
             logger.info("Config (" + (userConfig.entrySet().size() > 0 ? " yes " : " no  ") + "): user properties from resource 'user.conf'");
             File userDirFile = new File(System.getProperty("user.dir"), "/config/ethereumj.conf");
@@ -129,6 +132,7 @@ public class SystemProperties {
                     .withFallback(testConfig)
                     .withFallback(userConfig)
                     .withFallback(userDirConfig)
+                    .withFallback(envFileConfig)
                     .withFallback(cmdLineConfigRes)
                     .withFallback(referenceConfig);
             validateConfig();
