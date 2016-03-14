@@ -110,6 +110,7 @@ public class CommonConfig {
 //            client.init();
 //            client.startClient("localhost", 666);
             oneDB = connectRemoteDb();
+            oneDB = new CachingDataSource(oneDB);
         }
         return new XorDataSource(oneDB);
 //        String dataSource = config.getKeyValueDataSource();
