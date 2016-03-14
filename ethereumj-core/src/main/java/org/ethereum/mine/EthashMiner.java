@@ -25,8 +25,8 @@ public class EthashMiner implements MinerIfc {
 
     @PostConstruct
     private void init() {
-        cpuThreads = config.getMineCpuThreads();
-        fullMining = config.isMineFullDataset();
+//        cpuThreads = config.getMineCpuThreads();
+//        fullMining = config.isMineFullDataset();
     }
 
     @Override
