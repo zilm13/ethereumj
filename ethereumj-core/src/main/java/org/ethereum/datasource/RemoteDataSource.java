@@ -335,7 +335,27 @@ public class RemoteDataSource implements KeyValueDataSource {
         levelDbDataSource.setName("remote");
         levelDbDataSource.init();
 
-        final MyDataCenterInstanceConfig instConf = new MyDataCenterInstanceConfig("db.");
+        final MyDataCenterInstanceConfig instConf = new MyDataCenterInstanceConfig("db.") {
+            @Override
+            public String getVirtualHostName() {
+                String dbName = System.getenv("DB_NAME");
+                if (dbName == null) {
+                    return super.getVirtualHostName();
+                } else {
+                    return dbName + ".test.ethereumj.org";
+                }
+            }
+
+            @Override
+            public String getInstanceId() {
+                String dbName = System.getenv("DB_NAME");
+                if (dbName == null) {
+                    return super.getVirtualHostName();
+                } else {
+                    return dbName + ".test.ethereumj.org";
+                }
+            }
+        };
         final RemoteDataSource server = new RemoteDataSource(levelDbDataSource);
         logger.info("Starting server on port: " + instConf.getNonSecurePort());
         new Thread(new Runnable() {
@@ -347,7 +367,18 @@ public class RemoteDataSource implements KeyValueDataSource {
         server.waitForActive();
 
         logger.info("Registering and activating service in Eureka. VIP: " + instConf.getVirtualHostName());
-        DiscoveryManager.getInstance().initComponent(instConf, new DefaultEurekaClientConfig());
+        DiscoveryManager.getInstance().initComponent(instConf, new DefaultEurekaClientConfig() {
+            @Override
+            public List<String> getEurekaServerServiceUrls(String myZone) {
+                String serviceIp = System.getenv("EUREKA_IP");
+                if (serviceIp == null) {
+                    return super.getEurekaServerServiceUrls(myZone);
+                } else {
+                    logger.info("Eureka service IP overridden by env property: " + serviceIp);
+                    return Collections.singletonList("http://" + serviceIp + ":8080/eureka/v2/");
+                }
+            }
+        });
         ApplicationInfoManager.getInstance().setInstanceStatus(InstanceInfo.InstanceStatus.UP);
 
     }

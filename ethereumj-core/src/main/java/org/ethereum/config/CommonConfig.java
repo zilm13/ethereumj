@@ -71,12 +71,29 @@ public class CommonConfig {
                 return true;
             }
         };
-        DiscoveryManager.getInstance().initComponent(config, new DefaultEurekaClientConfig());
+        DiscoveryManager.getInstance().initComponent(config, new DefaultEurekaClientConfig() {
+            @Override
+            public List<String> getEurekaServerServiceUrls(String myZone) {
+                String serviceIp = System.getenv("EUREKA_IP");
+                if (serviceIp == null) {
+                    return super.getEurekaServerServiceUrls(myZone);
+                } else {
+                    logger.info("Eureka service IP overridden by env property: " + serviceIp);
+                    return Collections.singletonList("http://" + serviceIp + ":8080/eureka/v2/");
+                }
+            }
+        });
         return config;
     }
 
     private RemoteDataSource connectRemoteDb() {
         String vip = config.getConfig().getString("remote.datasource.eureka.vip");
+
+        String dbName = System.getenv("DB_NAME");
+        if (dbName != null) {
+            vip = dbName + ".test.ethereumj.org";
+        }
+
         List<InstanceInfo> dbInst = null;
         while (dbInst == null || dbInst.size() == 0) {
             logger.info("Quering Eureka for DB service at " + vip);
