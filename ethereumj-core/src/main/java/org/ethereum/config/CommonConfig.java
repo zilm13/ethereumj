@@ -37,6 +37,7 @@ import static java.util.Arrays.asList;
 public class CommonConfig {
 
     private static final Logger logger = LoggerFactory.getLogger("general");
+    private static final Logger loggerP = LoggerFactory.getLogger("poc");
 
     @Autowired
     private RedisConnection redisConnection;
@@ -78,7 +79,7 @@ public class CommonConfig {
                 if (serviceIp == null) {
                     return super.getEurekaServerServiceUrls(myZone);
                 } else {
-                    logger.info("Eureka service IP overridden by env property: " + serviceIp);
+                    loggerP.info("Eureka service IP overridden by env property: " + serviceIp);
                     return Collections.singletonList("http://" + serviceIp + ":8080/eureka/v2/");
                 }
             }
@@ -96,7 +97,7 @@ public class CommonConfig {
 
         List<InstanceInfo> dbInst = null;
         while (dbInst == null || dbInst.size() == 0) {
-            logger.info("Quering Eureka for DB service at " + vip);
+            loggerP.info("Quering Eureka for DB service at " + vip);
             getEurekaInstanceConfig();
             dbInst = DiscoveryManager.getInstance().getEurekaClient().getInstancesByVipAddress(vip, false);
             try {
@@ -105,7 +106,7 @@ public class CommonConfig {
                 throw new RuntimeException(e);
             }
         }
-        logger.info("DB service located (" + dbInst.size() + "). Connecting RemoteDB...");
+        loggerP.info("DB service located at " + dbInst.get(0).getIPAddr() + ":" + dbInst.get(0).getPort() + ". Connecting RemoteDB...");
 
         RemoteDataSource client = new RemoteDataSource();
         client.setName("remote");

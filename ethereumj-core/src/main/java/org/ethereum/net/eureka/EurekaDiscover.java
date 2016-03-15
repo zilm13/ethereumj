@@ -23,7 +23,8 @@ import java.util.*;
  */
 @Component
 public class EurekaDiscover {
-    private static final Logger logger = LoggerFactory.getLogger("discover");
+//    private static final Logger logger = LoggerFactory.getLogger("discover");
+    private static final Logger logger = LoggerFactory.getLogger("poc");
 
     @Autowired
     private SystemProperties config = SystemProperties.CONFIG;
@@ -50,7 +51,8 @@ public class EurekaDiscover {
     }
 
     public void register() {
-        logger.info("Registering and activating node in Eureka...");
+        logger.info("Registering and activating node " + ApplicationInfoManager.getInstance().getInfo().getIPAddr() +
+                ", InstanceID: " + ApplicationInfoManager.getInstance().getInfo().getInstanceId());
         ApplicationInfoManager.getInstance().setInstanceStatus(InstanceInfo.InstanceStatus.UP);
 
         EurekaClient eurekaClient = DiscoveryManager.getInstance().getEurekaClient();
@@ -80,10 +82,10 @@ public class EurekaDiscover {
         if (homeNode) {
             if (!published) {
                 published = true;
-                logger.info("Home node published in Eureka!");
+                logger.info("Home node has been published in Eureka");
             }
         } else {
-            logger.debug("New Eureka node appeared: " + node);
+            logger.info("New node discovered: " + node);
             if (nodeManager != null) {
                 nodeManager.addTrustedNode(node);
             }
