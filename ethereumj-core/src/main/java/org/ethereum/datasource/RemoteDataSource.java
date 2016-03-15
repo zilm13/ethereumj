@@ -271,6 +271,7 @@ public class RemoteDataSource implements KeyValueDataSource {
                     .childHandler(new ChannelInitializer<SocketChannel>() { // (4)
                         @Override
                         public void initChannel(SocketChannel ch) throws Exception {
+                            logger.info("Connected: " + ch);
                             ch.pipeline().addLast(new LengthFieldPrepender(4));
                             ch.pipeline().addLast(new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4));
                             ch.pipeline().addLast(new ServerHandler());
@@ -365,6 +366,7 @@ public class RemoteDataSource implements KeyValueDataSource {
             }
         }).start();
         server.waitForActive();
+        logger.info("RemoteDataSource listening on port " + instConf.getNonSecurePort());
 
         logger.info("Registering and activating service in Eureka. VIP: " + instConf.getVirtualHostName());
         DiscoveryManager.getInstance().initComponent(instConf, new DefaultEurekaClientConfig() {
@@ -380,6 +382,9 @@ public class RemoteDataSource implements KeyValueDataSource {
             }
         });
         ApplicationInfoManager.getInstance().setInstanceStatus(InstanceInfo.InstanceStatus.UP);
+        while(true) {
+
+        }
 
     }
 }
