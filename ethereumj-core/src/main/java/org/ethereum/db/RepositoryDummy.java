@@ -265,7 +265,7 @@ public class RepositoryDummy extends RepositoryImpl {
         AccountState accountState = new AccountState();
         worldState.put(wrap(addr), accountState);
 
-        ContractDetails contractDetails = new ContractDetailsImpl();
+        ContractDetails contractDetails = ctx.getBean(ContractDetailsImpl.class);
         detailsDB.put(wrap(addr), contractDetails);
 
         return accountState;
@@ -294,7 +294,7 @@ public class RepositoryDummy extends RepositoryImpl {
             account = account.clone();
 
         if (details == null)
-            details = new ContractDetailsImpl();
+            details = ctx.getBean(ContractDetailsImpl.class);
         else
             details = details.clone();
 

@@ -21,7 +21,7 @@ public class ContractDetailsCacheImpl implements ContractDetails {
 
     private Map<DataWord, DataWord> storage = new HashMap<>();
 
-    ContractDetails origContract = new ContractDetailsImpl();
+    ContractDetails origContract;
 
     private byte[] code = EMPTY_BYTE_ARRAY;
 

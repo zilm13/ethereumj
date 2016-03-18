@@ -1,5 +1,6 @@
 package org.ethereum.db;
 
+import org.ethereum.config.CommonConfig;
 import org.ethereum.config.SystemProperties;
 import org.ethereum.datasource.DataSourcePool;
 import org.ethereum.datasource.KeyValueDataSource;
@@ -10,8 +11,13 @@ import org.ethereum.util.RLPElement;
 import org.ethereum.util.RLPItem;
 import org.ethereum.util.RLPList;
 import org.ethereum.vm.DataWord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongycastle.util.Arrays;
 import org.spongycastle.util.encoders.Hex;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Component;
 
 import java.util.*;
 
@@ -25,7 +31,12 @@ import static org.ethereum.util.ByteUtil.*;
  * @author Roman Mandeleil
  * @since 24.06.2014
  */
+@Component @Scope("prototype")
 public class ContractDetailsImpl implements ContractDetails {
+    private static final Logger logger = LoggerFactory.getLogger("general");
+
+    @Autowired
+    CommonConfig commonConfig;
 
     private byte[] rlpEncoded;
 
@@ -46,7 +57,7 @@ public class ContractDetailsImpl implements ContractDetails {
         decode(rlpCode);
     }
 
-    public ContractDetailsImpl(byte[] address, SecureTrie storageTrie, byte[] code) {
+    private ContractDetailsImpl(byte[] address, SecureTrie storageTrie, byte[] code) {
         this.address = address;
         this.storageTrie = storageTrie;
         this.code = code;
@@ -247,14 +258,15 @@ public class ContractDetailsImpl implements ContractDetails {
         if (externalStorage) {
             storageTrie.getCache().setDB(getExternalStorageDataSource());
             storageTrie.sync();
-
-            DataSourcePool.closeDataSource("details-storage/" + toHexString(address));
+            externalStorageDataSource.close();
         }
     }
 
     private KeyValueDataSource getExternalStorageDataSource() {
         if (externalStorageDataSource == null) {
-            externalStorageDataSource = levelDbByName("details-storage/" + toHexString(address));
+            externalStorageDataSource = commonConfig.keyValueDataSource();
+            externalStorageDataSource.setName("details-storage/" + toHexString(address));
+            externalStorageDataSource.init();
         }
         return externalStorageDataSource;
     }
@@ -299,7 +311,9 @@ public class ContractDetailsImpl implements ContractDetails {
 
         ContractDetailsImpl details = new ContractDetailsImpl(this.address, snapStorage, this.code);
         details.externalStorage = this.externalStorage;
+        details.externalStorageDataSource = this.externalStorageDataSource;
         details.keys = this.keys;
+        details.commonConfig = commonConfig;
 
         return details;
     }
