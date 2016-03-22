@@ -64,7 +64,7 @@ public class DefaultConfig {
         blocks.setName("block");
         blocks.init();
         IndexedBlockStore indexedBlockStore = new IndexedBlockStore();
-        indexedBlockStore.init(new CachingDataSource(index), new CachingDataSource(blocks));
+        indexedBlockStore.init(index, blocks);
 
         return indexedBlockStore;
     }

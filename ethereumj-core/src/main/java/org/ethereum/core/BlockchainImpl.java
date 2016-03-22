@@ -1,8 +1,10 @@
 package org.ethereum.core;
 
+import org.ethereum.config.CommonConfig;
 import org.ethereum.config.SystemProperties;
 import org.ethereum.crypto.HashUtil;
 import org.ethereum.crypto.SHA3Helper;
+import org.ethereum.datasource.Flushable;
 import org.ethereum.db.BlockStore;
 import org.ethereum.db.ByteArrayWrapper;
 import org.ethereum.listener.EthereumListener;
@@ -478,7 +480,8 @@ public class BlockchainImpl implements Blockchain, org.ethereum.facade.Blockchai
         if (!byTest && needFlush(block)) {
             repository.flush();
             blockStore.flush();
-            System.gc();
+            ((Flushable )CommonConfig.one).flush();
+//            System.gc();
         }
 
         // Remove all wallet transactions as they already approved by the net
