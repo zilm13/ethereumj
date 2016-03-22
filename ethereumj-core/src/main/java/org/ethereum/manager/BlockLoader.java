@@ -3,6 +3,7 @@ package org.ethereum.manager;
 
 import org.ethereum.config.SystemProperties;
 import org.ethereum.core.*;
+import org.ethereum.db.DetailsDataStore;
 import org.ethereum.util.ExecutorPipeline;
 import org.ethereum.util.Functional;
 import org.ethereum.validator.BlockHeaderValidator;
@@ -57,13 +58,24 @@ public class BlockLoader {
     ExecutorPipeline<Block, Block> exec1;
     ExecutorPipeline<Block, ?> exec2;
 
+    @Autowired
+    DetailsDataStore detailsDataStore;
+
     public void loadBlocks() {
         exec1 = new ExecutorPipeline(8, 1000, true, new Functional.Function<Block, Block>() {
             @Override
             public Block apply(Block b) {
                 for (Transaction tx : b.getTransactionsList()) {
                     tx.getSender();
+                    detailsDataStore.fetch(tx.getSender());
+//                    System.out.println("=== fetched " + Hex.toHexString(tx.getSender()) + " #" + b.getNumber() + " (" + Hex.toHexString(tx.getHash()) + ")");
+                    byte[] receiveAddress = tx.isContractCreation() ? tx.getContractAddress() : tx.getReceiveAddress();
+                    if (receiveAddress != null) {
+//                        System.out.println("=== fetched " +  Hex.toHexString(receiveAddress) + " #" + b.getNumber() + " (" + Hex.toHexString(tx.getHash()) + ")");
+                        detailsDataStore.fetch(receiveAddress);
+                    }
                 }
+                detailsDataStore.fetch(b.getCoinbase());
                 return b;
             }
         }, new Functional.Consumer<Throwable>() {
@@ -81,6 +93,7 @@ public class BlockLoader {
         });
 
         String fileSrc = config.blocksLoader();
+        long bestBlock = blockchain.getBestBlock().getNumber();
         try {
             FileInputStream inputStream = null;
             inputStream = new FileInputStream(fileSrc);
@@ -92,6 +105,8 @@ public class BlockLoader {
 
                 byte[] blockRLPBytes = Hex.decode(scanner.nextLine());
                 Block block = new Block(blockRLPBytes);
+
+                if (block.getNumber() < bestBlock) continue;
 
                 exec1.push(block);
             }
