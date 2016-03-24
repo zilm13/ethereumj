@@ -443,11 +443,9 @@ public class RepositoryImpl implements Repository , org.ethereum.facade.Reposito
             return EMPTY_BYTE_ARRAY;
 
         byte[] codeHash = getAccountState(addr).getCodeHash();
-        if (Arrays.equals(codeHash, EMPTY_DATA_HASH))
-            return EMPTY_BYTE_ARRAY;
 
         ContractDetails details = getContractDetails(addr);
-        return (details == null) ? null : details.getCode();
+        return (details == null) ? null : details.getCode(codeHash);
     }
 
     @Override
@@ -538,6 +536,11 @@ public class RepositoryImpl implements Repository , org.ethereum.facade.Reposito
         } finally {
             rwLock.readLock().unlock();
         }
+    }
+
+    @Override
+    public boolean hasContractDetails(byte[] addr) {
+        return dds.get(addr) != null;
     }
 
     @Override
