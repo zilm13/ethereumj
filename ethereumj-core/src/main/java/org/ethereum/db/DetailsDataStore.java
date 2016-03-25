@@ -1,6 +1,6 @@
 package org.ethereum.db;
 
-import org.apache.commons.collections.map.LRUMap;
+import org.apache.commons.collections4.map.LRUMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spongycastle.util.encoders.Hex;
@@ -29,7 +29,7 @@ public class DetailsDataStore {
 
     private DatabaseImpl db = null;
     private Map<ByteArrayWrapper, ContractDetails> cache = new ConcurrentHashMap<>();
-    private Map<ByteArrayWrapper, ContractDetails> readCache = new LRUMap(10000);
+    private Map<ByteArrayWrapper, ContractDetails> readCache = new LRUMap(500);
     private Set<ByteArrayWrapper> removes = new HashSet<>();
 
     public DetailsDataStore() {

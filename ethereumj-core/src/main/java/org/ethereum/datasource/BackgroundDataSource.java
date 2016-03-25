@@ -41,7 +41,7 @@ public class BackgroundDataSource implements KeyValueDataSource, Flushable {
         }
 
         logger.debug("Submitting flush of " + flushCache.size() + " entries");
-        flusher.submit(new Runnable() {
+        Runnable flush = new Runnable() {
             @Override
             public void run() {
                 try {
@@ -54,7 +54,9 @@ public class BackgroundDataSource implements KeyValueDataSource, Flushable {
                     logger.error("Error while doing flush task: ", e);
                 }
             }
-        });
+        };
+        flush.run();
+//        flusher.submit(flush);
     }
 
     @Override

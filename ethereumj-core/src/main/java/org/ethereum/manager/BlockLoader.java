@@ -62,20 +62,20 @@ public class BlockLoader {
     DetailsDataStore detailsDataStore;
 
     public void loadBlocks() {
-        exec1 = new ExecutorPipeline(8, 1000, true, new Functional.Function<Block, Block>() {
+        exec1 = new ExecutorPipeline(8, 200, true, new Functional.Function<Block, Block>() {
             @Override
             public Block apply(Block b) {
                 for (Transaction tx : b.getTransactionsList()) {
                     tx.getSender();
-                    detailsDataStore.fetch(tx.getSender());
-//                    System.out.println("=== fetched " + Hex.toHexString(tx.getSender()) + " #" + b.getNumber() + " (" + Hex.toHexString(tx.getHash()) + ")");
-                    byte[] receiveAddress = tx.isContractCreation() ? tx.getContractAddress() : tx.getReceiveAddress();
-                    if (receiveAddress != null) {
-//                        System.out.println("=== fetched " +  Hex.toHexString(receiveAddress) + " #" + b.getNumber() + " (" + Hex.toHexString(tx.getHash()) + ")");
-                        detailsDataStore.fetch(receiveAddress);
-                    }
+//                    detailsDataStore.fetch(tx.getSender());
+////                    System.out.println("=== fetched " + Hex.toHexString(tx.getSender()) + " #" + b.getNumber() + " (" + Hex.toHexString(tx.getHash()) + ")");
+//                    byte[] receiveAddress = tx.isContractCreation() ? tx.getContractAddress() : tx.getReceiveAddress();
+//                    if (receiveAddress != null) {
+////                        System.out.println("=== fetched " +  Hex.toHexString(receiveAddress) + " #" + b.getNumber() + " (" + Hex.toHexString(tx.getHash()) + ")");
+//                        detailsDataStore.fetch(receiveAddress);
+//                    }
                 }
-                detailsDataStore.fetch(b.getCoinbase());
+//                detailsDataStore.fetch(b.getCoinbase());
                 return b;
             }
         }, new Functional.Consumer<Throwable>() {
@@ -85,7 +85,7 @@ public class BlockLoader {
             }
         });
 
-        exec2 = exec1.add(1, 1000, new Functional.Consumer<Block>() {
+        exec2 = exec1.add(1, 200, new Functional.Consumer<Block>() {
             @Override
             public void accept(Block block) {
                 blockWork(block);
