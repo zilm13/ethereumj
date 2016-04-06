@@ -1,19 +1,13 @@
 package org.ethereum.config;
 
-import org.ethereum.datasource.CachingDataSource;
-import org.ethereum.datasource.HashMapDB;
-import org.ethereum.datasource.KeyValueDataSource;
-import org.ethereum.datasource.LevelDbDataSource;
+import org.ethereum.datasource.*;
 import org.ethereum.db.BlockStore;
 import org.ethereum.db.IndexedBlockStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Scope;
+import org.springframework.context.annotation.*;
 
 import javax.annotation.PostConstruct;
 
@@ -67,7 +61,8 @@ public class DefaultConfig {
         return new LevelDbDataSource(name);
     }
 
-    @Lazy @Bean @Scope("prototype")
+    @Lazy
+    @Bean @Scope("prototype")
     GemFireDataSource gemFireDataSource(String name) {
         return new GemFireDataSource(name);
     }
