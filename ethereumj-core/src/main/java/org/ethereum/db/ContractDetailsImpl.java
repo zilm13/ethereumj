@@ -4,15 +4,19 @@ import org.ethereum.config.SystemProperties;
 import org.ethereum.datasource.DataSourcePool;
 import org.ethereum.datasource.KeyValueDataSource;
 import org.ethereum.trie.SecureTrie;
+import org.ethereum.trie.TrieImpl;
 import org.ethereum.util.RLP;
 import org.ethereum.util.RLPElement;
 import org.ethereum.util.RLPItem;
 import org.ethereum.util.RLPList;
 import org.ethereum.vm.DataWord;
 import org.spongycastle.util.Arrays;
+import org.spongycastle.util.encoders.Hex;
 
 import java.util.*;
 
+import static java.lang.Math.max;
+import static java.lang.Math.min;
 import static org.ethereum.crypto.HashUtil.EMPTY_TRIE_HASH;
 import static org.ethereum.datasource.DataSourcePool.levelDbByName;
 import static org.ethereum.util.ByteUtil.*;

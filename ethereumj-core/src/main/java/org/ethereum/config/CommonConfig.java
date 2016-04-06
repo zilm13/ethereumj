@@ -1,10 +1,15 @@
 package org.ethereum.config;
 
+import com.netflix.appinfo.EurekaInstanceConfig;
+import com.netflix.appinfo.InstanceInfo;
+import com.netflix.appinfo.MyDataCenterInstanceConfig;
+import com.netflix.discovery.DefaultEurekaClientConfig;
+import com.netflix.discovery.DiscoveryManager;
+import com.typesafe.config.ConfigException;
 import org.ethereum.core.PendingTransaction;
 import org.ethereum.core.Repository;
 import org.ethereum.core.Transaction;
-import org.ethereum.datasource.KeyValueDataSource;
-import org.ethereum.datasource.LevelDbDataSource;
+import org.ethereum.datasource.*;
 import org.ethereum.datasource.mapdb.MapDBFactory;
 import org.ethereum.datasource.redis.RedisConnection;
 import org.ethereum.db.RepositoryImpl;
@@ -12,6 +17,7 @@ import org.ethereum.validator.*;
 import org.hibernate.SessionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.spongycastle.util.encoders.Hex;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.*;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -31,6 +37,7 @@ import static java.util.Arrays.asList;
 public class CommonConfig {
 
     private static final Logger logger = LoggerFactory.getLogger("general");
+    private static final Logger loggerP = LoggerFactory.getLogger("poc");
 
     @Autowired
     private RedisConnection redisConnection;
@@ -45,23 +52,101 @@ public class CommonConfig {
         return new RepositoryImpl(keyValueDataSource(), keyValueDataSource());
     }
 
+    KeyValueDataSource oneDB;
+
+    @Bean
+    EurekaInstanceConfig getEurekaInstanceConfig() {
+        MyDataCenterInstanceConfig config = new MyDataCenterInstanceConfig() {
+            @Override
+            public String getInstanceId() {
+                return Hex.toHexString(CommonConfig.this.config.nodeId());
+            }
+
+            @Override
+            public int getNonSecurePort() {
+                return CommonConfig.this.config.listenPort();
+            }
+
+            @Override
+            public boolean isNonSecurePortEnabled() {
+                return true;
+            }
+        };
+        DiscoveryManager.getInstance().initComponent(config, new DefaultEurekaClientConfig() {
+            @Override
+            public List<String> getEurekaServerServiceUrls(String myZone) {
+                String serviceIp = System.getenv("EUREKA_IP");
+                if (serviceIp == null) {
+                    return super.getEurekaServerServiceUrls(myZone);
+                } else {
+                    loggerP.info("Eureka service IP overridden by env property: " + serviceIp);
+                    return Collections.singletonList("http://" + serviceIp + ":8080/eureka/v2/");
+                }
+            }
+        });
+        return config;
+    }
+
+    private RemoteDataSource connectRemoteDb() {
+        String vip = config.getConfig().getString("remote.datasource.eureka.vip");
+
+        String dbName = System.getenv("DB_NAME");
+        if (dbName != null) {
+            vip = dbName + ".test.ethereumj.org";
+        }
+
+        List<InstanceInfo> dbInst = null;
+        while (dbInst == null || dbInst.size() == 0) {
+            loggerP.info("Quering Eureka for DB service at " + vip);
+            getEurekaInstanceConfig();
+            dbInst = DiscoveryManager.getInstance().getEurekaClient().getInstancesByVipAddress(vip, false);
+            try {
+                Thread.sleep(10000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        loggerP.info("DB service located at " + dbInst.get(0).getIPAddr() + ":" + dbInst.get(0).getPort() + ". Connecting RemoteDB...");
+
+        RemoteDataSource client = new RemoteDataSource();
+        client.setName("remote");
+        client.init();
+        client.startClient(dbInst.get(0).getIPAddr(), dbInst.get(0).getPort());
+
+        return client;
+    }
+
     @Bean
     @Scope("prototype")
     public KeyValueDataSource keyValueDataSource() {
-        String dataSource = config.getKeyValueDataSource();
-        try {
-            if ("redis".equals(dataSource) && redisConnection.isAvailable()) {
-                // Name will be defined before initialization
-                return redisConnection.createDataSource("");
-            } else if ("mapdb".equals(dataSource)) {
-                return mapDBFactory.createDataSource();
-            }
-
-            dataSource = "leveldb";
-            return new LevelDbDataSource();
-        } finally {
-            logger.info(dataSource + " key-value data source created.");
+        if (oneDB == null) {
+//            oneDB = new LevelDbDataSource();
+//            oneDB.setName("one");
+//            oneDB.init();
+//            RemoteDataSource client = new RemoteDataSource();
+//            client.setName("remote");
+//            client.init();
+//            client.startClient("localhost", 666);
+            oneDB = connectRemoteDb();
+            oneDB = new CachingDataSource(oneDB);
         }
+        return new XorDataSource(oneDB);
+//        String dataSource = config.getKeyValueDataSource();
+//        try {
+//            if ("redis".equals(dataSource) && redisConnection.isAvailable()) {
+//                // Name will be defined before initialization
+//                return redisConnection.createDataSource("");
+//            } else if ("mapdb".equals(dataSource)) {
+//                return mapDBFactory.createDataSource();
+//            } else if ("gemfire".equals(dataSource)) {
+//                return new GemFireDataSource();
+//            }
+//
+//            dataSource = "leveldb";
+//            return new LevelDbDataSource();
+//        } finally {
+//            logger.info(dataSource + " key-value data source created.");
+//        }
     }
 
     @Bean

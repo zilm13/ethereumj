@@ -38,7 +38,7 @@ public class DetailsDataStore {
             byte[] data = db.get(key);
             if (data == null) return null;
 
-            details = new ContractDetailsImpl(data);
+            details = new ContractDetailsImpl(db.getDb(), data);
             cache.put(wrappedKey, details);
 
             float out = ((float) data.length) / 1048576;
@@ -84,6 +84,7 @@ public class DetailsDataStore {
         Map<byte[], byte[]> batch = new HashMap<>();
         for (Map.Entry<ByteArrayWrapper, ContractDetails> entry : cache.entrySet()) {
             ContractDetails details = entry.getValue();
+            ((ContractDetailsImpl) details).setDb(db.getDb());
             details.syncStorage();
 
             byte[] key = entry.getKey().getData();

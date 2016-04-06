@@ -163,7 +163,8 @@ public final class Serializers {
 
         @Override
         public ContractDetailsImpl deserialize(byte[] bytes) {
-            return isEmpty(bytes) ? null : new ContractDetailsImpl(bytes);
+//            return isEmpty(bytes) ? null : new ContractDetailsImpl(bytes);
+            return null;
         }
     }
 

@@ -1,6 +1,8 @@
 package org.ethereum.datasource;
 
 import org.ethereum.db.ByteArrayWrapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,12 +21,16 @@ public class CachingDataSource implements KeyValueDataSource, Flushable {
     }
 
     public void flush() {
+        long s = System.currentTimeMillis();
+        int size = cache.size();
+
         Map<byte[], byte[]> records = new HashMap<>();
         for (Map.Entry<ByteArrayWrapper, byte[]> entry : cache.entrySet()) {
             records.put(entry.getKey().getData(), entry.getValue());
         }
         source.updateBatch(records);
         cache.clear();
+        logger.info("CachingDataSource.flush(): " + size + " entries in " + (System.currentTimeMillis() - s) + " ms");
     }
 
     @Override
