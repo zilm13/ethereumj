@@ -3,8 +3,10 @@ package org.ethereum.config;
 import org.ethereum.core.PendingTransaction;
 import org.ethereum.core.Repository;
 import org.ethereum.core.Transaction;
+import org.ethereum.datasource.BackgroundDataSource;
 import org.ethereum.datasource.KeyValueDataSource;
 import org.ethereum.datasource.LevelDbDataSource;
+import org.ethereum.datasource.XorDataSource;
 import org.ethereum.datasource.mapdb.MapDBFactory;
 import org.ethereum.datasource.redis.RedisConnection;
 import org.ethereum.db.RepositoryImpl;
@@ -45,22 +47,38 @@ public class CommonConfig {
         return new RepositoryImpl(keyValueDataSource(), keyValueDataSource());
     }
 
+    public static KeyValueDataSource one;
+
+    private KeyValueDataSource getOneDB() {
+        if (one == null) {
+            one = new LevelDbDataSource();
+            one.setName("one");
+            one.init();
+
+            one = new BackgroundDataSource(one);
+        }
+        return one;
+    }
+
     @Bean
     @Scope("prototype")
     public KeyValueDataSource keyValueDataSource() {
-        String dataSource = config.getKeyValueDataSource();
+//        String dataSource = config.getKeyValueDataSource();
         try {
-            if ("redis".equals(dataSource) && redisConnection.isAvailable()) {
-                // Name will be defined before initialization
-                return redisConnection.createDataSource("");
-            } else if ("mapdb".equals(dataSource)) {
-                return mapDBFactory.createDataSource();
-            }
+            KeyValueDataSource oneDB = getOneDB();
+            return new XorDataSource(oneDB);
 
-            dataSource = "leveldb";
-            return new LevelDbDataSource();
+//            if ("redis".equals(dataSource) && redisConnection.isAvailable()) {
+//                // Name will be defined before initialization
+//                return redisConnection.createDataSource("");
+//            } else if ("mapdb".equals(dataSource)) {
+//                return mapDBFactory.createDataSource();
+//            }
+//
+//            dataSource = "leveldb";
+//            return new LevelDbDataSource();
         } finally {
-            logger.info(dataSource + " key-value data source created.");
+            logger.info(" key-value data source created.");
         }
     }
 

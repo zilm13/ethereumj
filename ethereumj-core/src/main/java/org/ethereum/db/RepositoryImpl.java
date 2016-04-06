@@ -16,9 +16,12 @@ import org.ethereum.vm.DataWord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spongycastle.util.encoders.Hex;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.util.FileSystemUtils;
 
 import javax.annotation.Nonnull;
+import javax.annotation.PostConstruct;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
@@ -48,10 +51,15 @@ public class RepositoryImpl implements Repository , org.ethereum.facade.Reposito
     private static final Logger logger = LoggerFactory.getLogger("repository");
     private static final Logger gLogger = LoggerFactory.getLogger("general");
 
+    @Autowired
+    ApplicationContext ctx;
+
+    @Autowired
+    private DetailsDataStore dds = new DetailsDataStore();
+
     private Trie worldState;
 
     private DatabaseImpl detailsDB = null;
-    private DetailsDataStore dds = new DetailsDataStore();
 
     private DatabaseImpl stateDB = null;
 
@@ -73,14 +81,17 @@ public class RepositoryImpl implements Repository , org.ethereum.facade.Reposito
     }
 
     public RepositoryImpl(KeyValueDataSource detailsDS, KeyValueDataSource stateDS) {
+        this.detailsDS = detailsDS;
+        this.stateDS = stateDS;
+    }
 
+    @PostConstruct
+    void init() {
         detailsDS.setName(DETAILS_DB);
         detailsDS.init();
-        this.detailsDS = detailsDS;
 
         stateDS.setName(STATE_DB);
         stateDS.init();
-        this.stateDS = stateDS;
 
         detailsDB = new DatabaseImpl(detailsDS);
         dds.setDB(detailsDB);
@@ -88,15 +99,6 @@ public class RepositoryImpl implements Repository , org.ethereum.facade.Reposito
         stateDB = new DatabaseImpl(stateDS);
         worldState = new SecureTrie(stateDB.getDb());
     }
-
-    public RepositoryImpl(String detailsDbName, String stateDbName) {
-        detailsDB = new DatabaseImpl(detailsDbName);
-        dds.setDB(detailsDB);
-
-        stateDB = new DatabaseImpl(stateDbName);
-        worldState = new SecureTrie(stateDB.getDb());
-    }
-
 
     @Override
     public void reset() {
@@ -161,7 +163,7 @@ public class RepositoryImpl implements Repository , org.ethereum.facade.Reposito
 
                 ContractDetailsCacheImpl contractDetailsCache = (ContractDetailsCacheImpl) contractDetails;
                 if (contractDetailsCache.origContract == null) {
-                    contractDetailsCache.origContract = new ContractDetailsImpl();
+                    contractDetailsCache.origContract = ctx.getBean(ContractDetailsImpl.class);
                     contractDetailsCache.origContract.setAddress(hash.getData());
                     contractDetailsCache.commit();
                 }
@@ -564,7 +566,7 @@ public class RepositoryImpl implements Repository , org.ethereum.facade.Reposito
                 config.getBlockchainConfig().getCommonConstants().getInitialNonce(), BigInteger.ZERO);
 
         updateAccountState(addr, accountState);
-        updateContractDetails(addr, new ContractDetailsImpl());
+        updateContractDetails(addr, ctx.getBean(ContractDetailsImpl.class));
 
         return accountState;
     }
