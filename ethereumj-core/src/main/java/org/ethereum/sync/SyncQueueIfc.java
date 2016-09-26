@@ -2,6 +2,7 @@ package org.ethereum.sync;
 
 import org.ethereum.core.Block;
 import org.ethereum.core.BlockHeaderWrapper;
+import org.ethereum.db.ByteArrayWrapper;
 
 import java.util.Collection;
 import java.util.List;
@@ -37,6 +38,36 @@ public interface SyncQueueIfc {
      */
     HeadersRequest requestHeaders();
 
+
+    // **** TODO: Refactor to detach versions
+    /**
+     * Wanted receipts
+     */
+    interface ReceiptsRequest {
+        List<ReceiptsRequest> split(int count);
+
+        List<byte[]> getReceiptsHashes();
+    }
+
+    /**
+     * Returns wanted receipts request
+     */
+    ReceiptsRequest requestReceipts(int maxSize);
+    /**
+     * Wanted node data
+     */
+    interface NodeDataRequest {
+        List<NodeDataRequest> split(int count);
+
+        List<byte[]> getHashes();
+    }
+
+    /**
+     * Returns wanted receipts request
+     */
+    NodeDataRequest requestNodeData(int maxSize);
+    // **** TODO: Refactor to detach versions
+
     /**
      * Adds received headers.
      * Headers need to verified.
@@ -61,4 +92,8 @@ public interface SyncQueueIfc {
      * Returns approximate header count waiting for their blocks
      */
     int getHeadersCount();
+
+    int getReceiptsCount();
+
+    int getNodeDataCount();
 }

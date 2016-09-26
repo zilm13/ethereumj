@@ -4,25 +4,26 @@ import org.ethereum.config.SystemProperties;
 import org.ethereum.core.*;
 import org.ethereum.listener.CompositeEthereumListener;
 import org.ethereum.listener.EthereumListener;
-import org.ethereum.net.server.Channel;
+import org.ethereum.net.eth.handler.StateWrapper;
 import org.ethereum.net.server.ChannelManager;
-import org.ethereum.util.ExecutorPipeline;
-import org.ethereum.util.Functional;
-import org.ethereum.validator.BlockHeaderValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spongycastle.util.encoders.Hex;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
 
-import static java.lang.Math.max;
-import static java.util.Collections.singletonList;
-import static org.ethereum.core.ImportResult.*;
+import static org.ethereum.core.ImportResult.IMPORTED_BEST;
+import static org.ethereum.core.ImportResult.IMPORTED_NOT_BEST;
+import static org.ethereum.core.ImportResult.NO_PARENT;
 
 /**
  * @author Mikhail Kalinin
@@ -31,54 +32,25 @@ import static org.ethereum.core.ImportResult.*;
 @Component
 public class SyncManager {
 
+    enum SyncType {
+        FULL,
+        FAST
+    }
+
     private final static Logger logger = LoggerFactory.getLogger("sync");
 
-
-    private static final int BLOCK_QUEUE_LIMIT = 20000;
-    private static final int HEADER_QUEUE_LIMIT = 20000;
-
-    // Transaction.getSender() is quite heavy operation so we are prefetching this value on several threads
-    // to unload the main block importing cycle
-    private ExecutorPipeline<BlockWrapper,BlockWrapper> exec1 = new ExecutorPipeline<>
-            (4, 1000, true, new Functional.Function<BlockWrapper,BlockWrapper>() {
-                public BlockWrapper apply(BlockWrapper blockWrapper) {
-                    for (Transaction tx : blockWrapper.getBlock().getTransactionsList()) {
-                        tx.getSender();
-                    }
-                    return blockWrapper;
-                }
-            }, new Functional.Consumer<Throwable>() {
-                public void accept(Throwable throwable) {
-                    logger.error("Unexpected exception: ", throwable);
-                }
-            });
-
-    private ExecutorPipeline<BlockWrapper, Void> exec2 = exec1.add(1, 1, new Functional.Consumer<BlockWrapper>() {
-        @Override
-        public void accept(BlockWrapper blockWrapper) {
-            blockQueue.add(blockWrapper);
-        }
-    });
-
-    /**
-     * Queue with validated blocks to be added to the blockchain
-     */
-    private BlockingQueue<BlockWrapper> blockQueue = new LinkedBlockingQueue<>();
+    private boolean syncDone = false;
 
     private long lastKnownBlockNumber = 0;
-    private boolean syncDone = false;
 
     @Autowired
     private Blockchain blockchain;
 
     @Autowired
-    private BlockHeaderValidator headerValidator;
-
-    @Autowired
-    private CompositeEthereumListener compositeEthereumListener;
-
-    @Autowired
     EthereumListener ethereumListener;
+
+    @Autowired
+    ApplicationContext ctx;
 
     ChannelManager channelManager;
 
@@ -88,13 +60,24 @@ public class SyncManager {
 
     private SyncQueueIfc syncQueue;
 
-    private CountDownLatch receivedHeadersLatch = new CountDownLatch(0);
-    private CountDownLatch receivedBlocksLatch = new CountDownLatch(0);
+    private ScheduledExecutorService logExecutor = Executors.newSingleThreadScheduledExecutor();
+
+    private Map<Class, SyncStrategy> activeStrategies = new HashMap<>();
+
+    // TODO: Is validation the same here for both fast and full sync??
+    /**
+     * Queue with validated blocks to be added to the blockchain
+     */
+    private BlockingQueue<BlockWrapper> blockQueue = new LinkedBlockingQueue<>();
+
+    private BlockingQueue<FastBlockWrapper> fastBlockQueue = new LinkedBlockingDeque<>();
 
     private Thread syncQueueThread;
-    private Thread getHeadersThread;
-    private Thread getBodiesThread;
-    private ScheduledExecutorService logExecutor = Executors.newSingleThreadScheduledExecutor();
+
+    private SyncType syncType = SyncType.FAST;
+
+    @Autowired
+    private CompositeEthereumListener compositeEthereumListener;
 
     public SyncManager() {
     }
@@ -116,6 +99,9 @@ public class SyncManager {
         logger.info("Initializing SyncManager.");
         pool.init(channelManager);
 
+        syncQueue = new SyncQueueImpl(blockchain);
+
+
         Runnable queueProducer = new Runnable(){
 
             @Override
@@ -127,100 +113,66 @@ public class SyncManager {
         syncQueueThread = new Thread (queueProducer, "SyncQueueThread");
         syncQueueThread.start();
 
-        syncQueue = new SyncQueueImpl(blockchain);
+        // TODO: Pass it from config or command line?
+        SyncType syncType = SyncType.FAST;
 
-        getHeadersThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                headerRetrieveLoop();
-            }
-        }, "NewSyncThreadHeaders");
-        getHeadersThread.start();
-
-        getBodiesThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                blockRetrieveLoop();
-            }
-        }, "NewSyncThreadBlocks");
-        getBodiesThread.start();
+        for (Map.Entry<Class, SyncStrategy> entry: fetchStrategies(syncType).entrySet()) {
+            SyncStrategy strategy = entry.getValue();
+            strategy.init(channelManager, syncQueue, pool, this);
+            activeStrategies.put(entry.getKey(), strategy);
+        }
 
         if (logger.isInfoEnabled()) {
             startLogWorker();
         }
     }
 
-    private void headerRetrieveLoop() {
-        while(!Thread.currentThread().isInterrupted()) {
-            try {
+    // TODO: There will be some logic
+    private Map<Class, SyncStrategy> fetchStrategies(SyncType syncType) {
+        Map<Class, SyncStrategy> strategies = new HashMap<>();
+        SyncStrategy fullSync = ctx.getBean(FullSyncStrategy.class);
+        strategies.put(FullSyncStrategy.class, fullSync);
+        if (syncType.equals(SyncType.FAST)) {
+            SyncStrategy fastSync = ctx.getBean(FastSyncStrategy.class);
+            strategies.put(FastSyncStrategy.class, fastSync);
+        }
 
-                if (syncQueue.getHeadersCount() < HEADER_QUEUE_LIMIT) {
-                    Channel any = pool.getAnyIdle();
+        return strategies;
+    }
 
-                    if (any != null) {
-                        SyncQueueIfc.HeadersRequest hReq = syncQueue.requestHeaders();
-                        logger.debug("headerRetrieveLoop: request headers (" + hReq.getStart() + ") from " + any.getNode());
-                        any.getEthHandler().sendGetBlockHeaders(hReq.getStart(), hReq.getCount(), hReq.isReverse());
-                    } else {
-                        logger.debug("headerRetrieveLoop: No IDLE peers found");
-                    }
-                } else {
-                    logger.debug("headerRetrieveLoop: HeaderQueue is full");
-                }
-                receivedHeadersLatch = new CountDownLatch(1);
-                receivedHeadersLatch.await(isSyncDone() ? 10000 : 2000, TimeUnit.MILLISECONDS);
-
-            } catch (InterruptedException e) {
-                break;
-            } catch (Exception e) {
-                logger.error("Unexpected: ", e);
-            }
+    // V62/63 consumer
+    public void addList(List<Block> blocks, byte[] nodeId) {
+        if (syncType.equals(SyncType.FULL)) {
+            SyncStrategy fullSync = getActive(FullSyncStrategy.class);
+            if (fullSync != null) ((FullSyncStrategy) fullSync).addList(blocks, nodeId);
+        } else if (syncType.equals(SyncType.FAST)) {
+            SyncStrategy fastSync = getActive(FastSyncStrategy.class);
+            if (fastSync != null) ((FastSyncStrategy) fastSync).addList(blocks, nodeId);
         }
     }
 
-    private void blockRetrieveLoop() {
-        while(!Thread.currentThread().isInterrupted()) {
-            try {
+    // V62 consumer
+    public boolean validateAndAddNewBlock(Block block, byte[] nodeId) {
+        SyncStrategy fullSync = getActive(FullSyncStrategy.class);
+        return fullSync != null && ((FullSyncStrategy) fullSync).validateAndAddNewBlock(block, nodeId);
+    }
 
-                if (blockQueue.size() < BLOCK_QUEUE_LIMIT) {
-                    SyncQueueIfc.BlocksRequest bReq = syncQueue.requestBlocks(1000);
+    // V62 consumer
+    public boolean validateAndAddHeaders(List<BlockHeader> headers, byte[] nodeId) {
+        SyncStrategy fullSync = getActive(FullSyncStrategy.class);
+        return fullSync != null && ((FullSyncStrategy) fullSync).validateAndAddHeaders(headers, nodeId);
+    }
 
-                    if (bReq.getBlockHeaders().size() <= 3) {
-                        // new blocks are better to request from the header senders first
-                        // to get more chances to receive block body promptly
-                        for (BlockHeaderWrapper blockHeaderWrapper : bReq.getBlockHeaders()) {
-                            Channel channel = pool.getByNodeId(blockHeaderWrapper.getNodeId());
-                            if (channel != null) {
-                                channel.getEthHandler().sendGetBlockBodies(singletonList(blockHeaderWrapper));
-                            }
-                        }
-                    }
+    // V63 consumer
+    public void addReceipts(List<TransactionReceipt> receipts, byte[] nodeId) {
+        SyncStrategy fastSync = getActive(FastSyncStrategy.class);
+        if (fastSync != null) ((FastSyncStrategy) fastSync).addReceipts(receipts, nodeId);
+    }
 
-                    int reqBlocksCounter = 0;
-                    for (SyncQueueIfc.BlocksRequest blocksRequest : bReq.split(100)) {
-                        Channel any = pool.getAnyIdle();
-                        if (any == null) {
-                            logger.debug("blockRetrieveLoop: No IDLE peers found");
-                            break;
-                        } else {
-                            logger.debug("blockRetrieveLoop: Requesting " + blocksRequest.getBlockHeaders().size() + " blocks from " + any.getNode());
-                            any.getEthHandler().sendGetBlockBodies(blocksRequest.getBlockHeaders());
-                            reqBlocksCounter++;
-                        }
-                    }
-                    receivedBlocksLatch = new CountDownLatch(max(reqBlocksCounter, 1));
-                } else {
-                    logger.debug("blockRetrieveLoop: BlockQueue is full");
-                    receivedBlocksLatch = new CountDownLatch(1);
-                }
-
-                receivedBlocksLatch.await(2000, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                break;
-            } catch (Exception e) {
-                logger.error("Unexpected: ", e);
-            }
-        }
+    // V63 consumer
+    public void addNodeData(List<StateWrapper> states, byte[] nodeId) {
+        SyncStrategy fastSync = getActive(FastSyncStrategy.class);
+        if (fastSync != null) ((FastSyncStrategy) fastSync).addNodeData(states, nodeId);
     }
 
     /**
@@ -233,18 +185,31 @@ public class SyncManager {
             BlockWrapper wrapper = null;
             try {
 
+                // TODO: we need either pre-processing queue to store block until receipts and nodedata arrives
+                // or other way to wait until all block data will be filled
                 wrapper = blockQueue.take();
 
                 logger.debug("BlockQueue size: {}, headers queue size: {}", blockQueue.size(), syncQueue.getHeadersCount());
-                ImportResult importResult = blockchain.tryToConnect(wrapper.getBlock());
+
+                // TODO: Maybe this logic should be in syncType implementations?
+                ImportResult importResult = null;
+                switch (syncType) {
+                    case FULL:
+                        importResult = blockchain.tryToConnect(wrapper.getBlock());
+                        break;
+                    // TODO: Move to another queue?
+                    case FAST:
+                        fastBlockQueue.put(wrapper.getBlock());
+                        return;
+                }
 
                 if (importResult == IMPORTED_BEST) {
                     logger.info("Success importing BEST: block.number: {}, block.hash: {}, tx.size: {} ",
                             wrapper.getNumber(), wrapper.getBlock().getShortHash(),
                             wrapper.getBlock().getTransactionsList().size());
 
-                    if (wrapper.isNewBlock() && !syncDone) {
-                        syncDone = true;
+                    if (wrapper.isNewBlock() && !isSyncDone()) {
+                        setSyncDone(true);
                         channelManager.onSyncDone(true);
                         compositeEthereumListener.onSyncDone();
                     }
@@ -255,7 +220,7 @@ public class SyncManager {
                             wrapper.getNumber(), wrapper.getBlock().getShortHash(),
                             wrapper.getBlock().getTransactionsList().size());
 
-                if (syncDone && (importResult == IMPORTED_BEST || importResult == IMPORTED_NOT_BEST)) {
+                if (isSyncDone() && (importResult == IMPORTED_BEST || importResult == IMPORTED_NOT_BEST)) {
                     if (logger.isDebugEnabled()) logger.debug("Block dump: " + Hex.toHexString(wrapper.getBlock().getEncoded()));
                 }
 
@@ -276,154 +241,26 @@ public class SyncManager {
         }
     }
 
-    /**
-     * Adds a list of blocks to the queue
-     *
-     * @param blocks block list received from remote peer and be added to the queue
-     * @param nodeId nodeId of remote peer which these blocks are received from
-     */
-    public void addList(List<Block> blocks, byte[] nodeId) {
-
-        if (blocks.isEmpty()) {
-            return;
+    public void addBlockWrapper(BlockWrapper blockWrapper) {
+        if (syncType.equals(SyncType.FULL)) {
+            getBlockQueue().add(blockWrapper);
+        } else if (syncType.equals(SyncType.FAST)) {
+            SyncStrategy fastSync = getActive(FastSyncStrategy.class);
+            if (fastSync != null) ((FastSyncStrategy) fastSync).addBlockWrapper(blockWrapper, nodeId);
         }
-
-        synchronized (this) {
-            logger.debug("Adding new " + blocks.size() + " blocks to sync queue: " +
-                    blocks.get(0).getShortDescr() + " ... " + blocks.get(blocks.size() - 1).getShortDescr());
-
-            List<Block> newBlocks = syncQueue.addBlocks(blocks);
-
-            List<BlockWrapper> wrappers = new ArrayList<>();
-            for (Block b : newBlocks) {
-                wrappers.add(new BlockWrapper(b, nodeId));
-            }
-
-
-            logger.debug("Pushing " + wrappers.size() + " blocks to import queue: " + (wrappers.isEmpty() ? "" :
-                    wrappers.get(0).getBlock().getShortDescr() + " ... " + wrappers.get(wrappers.size() - 1).getBlock().getShortDescr()));
-
-            exec1.pushAll(wrappers);
-        }
-
-        receivedBlocksLatch.countDown();
-
-        if (logger.isDebugEnabled()) logger.debug(
-                "Blocks waiting to be proceed:  queue.size: [{}] lastBlock.number: [{}]",
-                blockQueue.size(),
-                blocks.get(blocks.size() - 1).getNumber()
-        );
     }
 
-    /**
-     * Adds NEW block to the queue
-     *
-     * @param block new block
-     * @param nodeId nodeId of the remote peer which this block is received from
-     *
-     * @return true if block passed validations and was added to the queue,
-     *         otherwise it returns false
-     */
-    public boolean validateAndAddNewBlock(Block block, byte[] nodeId) {
-
-        // run basic checks
-        if (!isValid(block.getHeader())) {
-            return false;
-        }
-
-        lastKnownBlockNumber = block.getNumber();
-
-        logger.debug("Adding new block to sync queue: " + block.getShortDescr());
-        syncQueue.addHeaders(singletonList(new BlockHeaderWrapper(block.getHeader(), nodeId)));
-
-        synchronized (this) {
-            List<Block> newBlocks = syncQueue.addBlocks(singletonList(block));
-
-            List<BlockWrapper> wrappers = new ArrayList<>();
-            for (Block b : newBlocks) {
-                boolean newBlock = Arrays.equals(block.getHash(), b.getHash());
-                BlockWrapper wrapper = new BlockWrapper(b, newBlock, nodeId);
-                wrapper.setReceivedAt(System.currentTimeMillis());
-                wrappers.add(wrapper);
-            }
-
-            logger.debug("Pushing " + wrappers.size() + " new blocks to import queue: " + (wrappers.isEmpty() ? "" :
-                    wrappers.get(0).getBlock().getShortDescr() + " ... " + wrappers.get(wrappers.size() - 1).getBlock().getShortDescr()));
-            exec1.pushAll(wrappers);
-        }
-
-        logger.debug("Blocks waiting to be proceed:  queue.size: [{}] lastBlock.number: [{}]",
-                blockQueue.size(),
-                block.getNumber());
-
-        return true;
-    }
-
-    /**
-     * Adds list of headers received from remote host <br>
-     * Runs header validation before addition <br>
-     * It also won't add headers of those blocks which are already presented in the queue
-     *
-     * @param headers list of headers got from remote host
-     * @param nodeId remote host nodeId
-     *
-     * @return true if blocks passed validation and were added to the queue,
-     *          otherwise it returns false
-     */
-    public boolean validateAndAddHeaders(List<BlockHeader> headers, byte[] nodeId) {
-
-        if (headers.isEmpty()) return true;
-
-        List<BlockHeaderWrapper> wrappers = new ArrayList<>(headers.size());
-
-        for (BlockHeader header : headers) {
-
-            if (!isValid(header)) {
-
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Invalid header RLP: {}", Hex.toHexString(header.getEncoded()));
-                }
-
-                return false;
-            }
-
-            wrappers.add(new BlockHeaderWrapper(header, nodeId));
-        }
-
-        syncQueue.addHeaders(wrappers);
-
-        receivedHeadersLatch.countDown();
-
-        logger.debug("{} headers added", headers.size());
-
-        return true;
-    }
-
-    /**
-     * Runs checks against block's header. <br>
-     * All these checks make sense before block is added to queue
-     * in front of checks running by {@link BlockchainImpl#isValid(BlockHeader)}
-     *
-     * @param header block header
-     * @return true if block is valid, false otherwise
-     */
-    private boolean isValid(BlockHeader header) {
-
-        if (!headerValidator.validate(header)) {
-
-            headerValidator.logErrors(logger);
-            return false;
-        }
-
-        return true;
+    private SyncStrategy getActive(Class clazz) {
+        if (activeStrategies.containsKey(clazz)) return activeStrategies.get(clazz);
+        return null;
     }
 
     public boolean isSyncDone() {
         return syncDone;
     }
 
-    public long getLastKnownBlockNumber() {
-        return lastKnownBlockNumber;
+    public void setSyncDone(boolean syncDone) {
+        this.syncDone = syncDone;
     }
 
     private void startLogWorker() {
@@ -441,16 +278,33 @@ public class SyncManager {
         }, 0, 30, TimeUnit.SECONDS);
     }
 
+    public long getLastKnownBlockNumber() {
+        return lastKnownBlockNumber;
+    }
+
+    public void setLastKnownBlockNumber(long lastKnownBlockNumber) {
+        this.lastKnownBlockNumber = lastKnownBlockNumber;
+    }
+
+    public BlockingQueue<BlockWrapper> getBlockQueue() {
+        return blockQueue;
+    }
+    public BlockingQueue<FastBlockWrapper> getFastBlockQueue() {
+        return fastBlockQueue;
+    }
+
     public void close() {
         pool.close();
         try {
-            exec1.shutdown();
-            if (getHeadersThread != null) getHeadersThread.interrupt();
-            if (getBodiesThread != null) getBodiesThread.interrupt();
+            for (SyncStrategy strategy: activeStrategies.values()) {
+                strategy.close();
+            }
             if (syncQueueThread != null) syncQueueThread.interrupt();
             logExecutor.shutdown();
         } catch (Exception e) {
             logger.warn("Problems closing SyncManager", e);
+        } finally {
+            activeStrategies.clear();
         }
     }
 }

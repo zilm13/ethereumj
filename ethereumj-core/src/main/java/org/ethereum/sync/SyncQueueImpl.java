@@ -109,6 +109,62 @@ public class SyncQueueImpl implements SyncQueueIfc {
         }
     }
 
+    class ReceiptsRequestImpl implements ReceiptsRequest {
+        private List<byte []> receiptsHashes = new ArrayList<>();
+
+        public ReceiptsRequestImpl() {
+        }
+
+        public ReceiptsRequestImpl(List<byte []> receiptsHashes) {
+            this.receiptsHashes = receiptsHashes;
+        }
+
+        @Override
+        public List<ReceiptsRequest> split(int count) {
+            List<ReceiptsRequest> ret = new ArrayList<>();
+            int start = 0;
+            while(start < getReceiptsHashes().size()) {
+                count = Math.min(getReceiptsHashes().size() - start, count);
+                ret.add(new ReceiptsRequestImpl(getReceiptsHashes().subList(start, start + count)));
+                start += count;
+            }
+            return ret;
+        }
+
+        @Override
+        public List<byte []> getReceiptsHashes() {
+            return receiptsHashes;
+        }
+    }
+
+    class NodeDataRequestImpl implements NodeDataRequest {
+        private List<byte []> hashes = new ArrayList<>();
+
+        public NodeDataRequestImpl() {
+        }
+
+        public NodeDataRequestImpl(List<byte []> hashes) {
+            this.hashes = hashes;
+        }
+
+        @Override
+        public List<NodeDataRequest> split(int count) {
+            List<NodeDataRequest> ret = new ArrayList<>();
+            int start = 0;
+            while(start < getHashes().size()) {
+                count = Math.min(getHashes().size() - start, count);
+                ret.add(new NodeDataRequestImpl(getHashes().subList(start, start + count)));
+                start += count;
+            }
+            return ret;
+        }
+
+        @Override
+        public List<byte []> getHashes() {
+            return hashes;
+        }
+    }
+
     Map<Long, Map<ByteArrayWrapper, HeaderElement>> headers = new HashMap<>();
 
     long minNum = Integer.MAX_VALUE;
@@ -257,6 +313,20 @@ public class SyncQueueImpl implements SyncQueueIfc {
         return (int) (maxNum - minNum);
     }
 
+    // TODO: Implement
+    // TODO: Refactor to detach versions ??
+    @Override
+    public synchronized int getReceiptsCount() {
+        return 0;
+    }
+
+    // TODO: Implement
+    // TODO: Refactor to detach versions ??
+    @Override
+    public synchronized int getNodeDataCount() {
+        return 0;
+    }
+
     @Override
     public synchronized BlocksRequest requestBlocks(int maxSize) {
         BlocksRequest ret = new BlocksRequestImpl();
@@ -351,5 +421,44 @@ public class SyncQueueImpl implements SyncQueueIfc {
             }
             return handler.visit(el, childrenRet);
         }
+    }
+
+    @Override
+    public ReceiptsRequest requestReceipts(int maxSize) {
+        ReceiptsRequest ret = new ReceiptsRequestImpl();
+
+        outer:
+        for (long i = minNum; i <= maxNum; i++) {
+            Map<ByteArrayWrapper, HeaderElement> gen = headers.get(i);
+            if (gen != null) {
+                for (HeaderElement element : gen.values()) {
+                    if (element.block == null) {
+                        ret.getReceiptsHashes().add(element.header.getHash());
+                        if (ret.getReceiptsHashes().size() >= maxSize) break outer;
+                    }
+                }
+            }
+        }
+        return ret;
+    }
+
+    @Override
+    public NodeDataRequest requestNodeData(int maxSize) {
+        NodeDataRequest ret = new NodeDataRequestImpl();
+
+        outer:
+        for (long i = minNum; i <= maxNum; i++) {
+            Map<ByteArrayWrapper, HeaderElement> gen = headers.get(i);
+            if (gen != null) {
+                for (HeaderElement element : gen.values()) {
+                    if (element.block == null) {
+                        // TODO: Do we need also state after each transaction???
+                        ret.getHashes().add(element.header.getHeader().getStateRoot());
+                        if (ret.getHashes().size() >= maxSize) break outer;
+                    }
+                }
+            }
+        }
+        return ret;
     }
 }
