@@ -65,6 +65,12 @@ public class Transaction {
      * Initialization code for a new contract */
     protected byte[] data;
 
+    /**
+     * Since EIP-155
+     * If it's not null, affects hashing of not signed transaction for signing purposes
+     */
+    private Byte chainId;
+
     /* the elliptic curve signature
      * (including public key recovery bits) */
     private ECDSASignature signature;
@@ -83,7 +89,9 @@ public class Transaction {
         parsed = false;
     }
 
-    /* creation contract tx
+    /**
+     * @deprecated Use {@link Transaction#Transaction(byte[], byte[], byte[], byte[], byte[], byte[], byte)} instead
+     * creation contract tx
      * [ nonce, gasPrice, gasLimit, "", endowment, init, signature(v, r, s) ]
      * or simple send tx
      * [ nonce, gasPrice, gasLimit, receiveAddress, value, data, signature(v, r, s) ]
@@ -103,10 +111,31 @@ public class Transaction {
         parsed = true;
     }
 
+    public Transaction(byte[] nonce, byte[] gasPrice, byte[] gasLimit, byte[] receiveAddress, byte[] value, byte[] data,
+                       byte chainId) {
+        this(nonce, gasPrice, gasLimit, receiveAddress, value, data);
+        this.chainId = chainId;
+    }
+
+    /**
+     * @deprecated Use {@link Transaction#Transaction(byte[], byte[], byte[], byte[], byte[], byte[], byte, byte[], byte[], byte)} instead
+     */
     public Transaction(byte[] nonce, byte[] gasPrice, byte[] gasLimit, byte[] receiveAddress, byte[] value, byte[] data, byte[] r, byte[] s, byte v) {
         this(nonce, gasPrice, gasLimit, receiveAddress, value, data);
         this.signature = ECDSASignature.fromComponents(r, s, v);
     }
+
+    /**
+     *
+     */
+    public Transaction(byte[] nonce, byte[] gasPrice, byte[] gasLimit, byte[] receiveAddress, byte[] value, byte[] data,
+                       byte chainId, byte[] r, byte[] s, byte v) {
+        this(nonce, gasPrice, gasLimit, receiveAddress, value, data);
+        this.chainId = chainId;
+        this.signature = ECDSASignature.fromComponents(r, s, v);
+    }
+
+
 
     public long transactionCost(BlockchainNetConfig config, Block block){
 
@@ -250,6 +279,10 @@ public class Transaction {
         return null;
     }
 
+    public Byte getChainId() {
+        return chainId;
+    }
+
     /**
      * @deprecated should prefer #sign(ECKey) over this method
      */
@@ -342,6 +375,7 @@ public class Transaction {
             r = RLP.encodeElement(BigIntegers.asUnsignedByteArray(signature.r));
             s = RLP.encodeElement(BigIntegers.asUnsignedByteArray(signature.s));
         } else {
+            // Should be chain id
             v = RLP.encodeElement(EMPTY_BYTE_ARRAY);
             r = RLP.encodeElement(EMPTY_BYTE_ARRAY);
             s = RLP.encodeElement(EMPTY_BYTE_ARRAY);
@@ -377,10 +411,20 @@ public class Transaction {
         return tx.hashCode() == this.hashCode();
     }
 
+    /**
+     * @deprecated Use {@link Transaction#createDefault(String, BigInteger, BigInteger, Integer)} instead
+     */
     public static Transaction createDefault(String to, BigInteger amount, BigInteger nonce){
         return create(to, amount, nonce, DEFAULT_GAS_PRICE, DEFAULT_BALANCE_GAS);
     }
 
+    public static Transaction createDefault(String to, BigInteger amount, BigInteger nonce, Integer chainId){
+        return create(to, amount, nonce, DEFAULT_GAS_PRICE, DEFAULT_BALANCE_GAS, chainId);
+    }
+
+    /**
+     * @deprecated use {@link Transaction#create(String, BigInteger, BigInteger, BigInteger, BigInteger, Integer)} instead
+     */
     public static Transaction create(String to, BigInteger amount, BigInteger nonce, BigInteger gasPrice, BigInteger gasLimit){
         return new Transaction(BigIntegers.asUnsignedByteArray(nonce),
                 BigIntegers.asUnsignedByteArray(gasPrice),
@@ -388,5 +432,16 @@ public class Transaction {
                 Hex.decode(to),
                 BigIntegers.asUnsignedByteArray(amount),
                 null);
+    }
+
+    public static Transaction create(String to, BigInteger amount, BigInteger nonce, BigInteger gasPrice,
+                                     BigInteger gasLimit, Integer chainId){
+        return new Transaction(BigIntegers.asUnsignedByteArray(nonce),
+                BigIntegers.asUnsignedByteArray(gasPrice),
+                BigIntegers.asUnsignedByteArray(gasLimit),
+                Hex.decode(to),
+                BigIntegers.asUnsignedByteArray(amount),
+                null,
+                chainId != null ? chainId.byteValue() : null);
     }
 }
