@@ -604,12 +604,16 @@ public class ECKey implements Serializable {
         }
 
         public boolean validateComponents() {
-            return validateComponents(r, s, v);
+            return validateComponents(r, s, v, (byte) Constants.getTxDefaultLowerV());
         }
 
-        public static boolean validateComponents(BigInteger r, BigInteger s, byte v) {
+        public boolean validateComponents(byte expectedLowerV) {
+            return validateComponents(r, s, v, expectedLowerV);
+        }
 
-            if (v != 27 && v != 28) return false;
+        public static boolean validateComponents(BigInteger r, BigInteger s, byte v, byte expectedLowerV) {
+
+            if (v != expectedLowerV && v != (expectedLowerV + 1)) return false;
 
             if (isLessThan(r, BigInteger.ONE)) return false;
             if (isLessThan(s, BigInteger.ONE)) return false;

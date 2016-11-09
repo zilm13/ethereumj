@@ -24,6 +24,8 @@ public class Constants {
 
     private static final BigInteger SECP256K1N = new BigInteger("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16);
 
+    private static final int TX_DEFAULT_LOWER_V = 27;
+
     public int getDURATION_LIMIT() {
         return 8;
     }
@@ -90,5 +92,9 @@ public class Constants {
      */
     public static BigInteger getSECP256K1N() {
         return SECP256K1N;
+    }
+
+    public static int getTxDefaultLowerV() {
+        return TX_DEFAULT_LOWER_V;
     }
 }

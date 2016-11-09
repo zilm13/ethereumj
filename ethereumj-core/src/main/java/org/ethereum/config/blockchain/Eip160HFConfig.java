@@ -1,6 +1,7 @@
 package org.ethereum.config.blockchain;
 
 import org.ethereum.config.BlockchainConfig;
+import org.ethereum.core.Transaction;
 import org.ethereum.vm.GasCost;
 
 /**
@@ -31,7 +32,14 @@ public class Eip160HFConfig extends Eip150HFConfig {
         return true;
     }
 
+    @Override
     public Integer getChainId() {
         return 1;
+    }
+
+    @Override
+    public boolean acceptTransactionSignature(Transaction tx) {
+        Integer expectedLowerV = getChainId() * 2 + 1;
+        return tx.getSignature().validateComponents(expectedLowerV.byteValue());
     }
 }
